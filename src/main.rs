@@ -15,7 +15,8 @@ use solana_sdk::{
 };
 const RPC_URL: &str = "https://api.devnet.solana.com";
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
+use std::{str::FromStr, time::Duration};
+use std::thread;
 
 #[derive(Serialize, Deserialize)]
 pub struct GetBalance {
@@ -23,10 +24,24 @@ pub struct GetBalance {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct GetAirdrop {
+    pub wallet: String,
+    pub sol: u64,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct GetBalanceRespose {
     pub wallet_add: String,
     pub balance_lamports: u64,
     pub balance_sol: f64,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct GetAirdropRespose {
+    pub wallet_add: String,
+    pub previous_balance_lamports: u64,
+    pub new_balance_lamports: u64,
+    pub new_balance_sol: f64,
 }
 
 #[handler]
@@ -42,9 +57,42 @@ fn get_balance(Json(data): Json<GetBalance>) -> Json<GetBalanceRespose> {
     })
 }
 
+#[handler]
+fn get_airdrop(Json(data): Json<GetAirdrop>) -> Json<GetAirdropRespose> {
+    let wallet_add = data.wallet;
+    let airdro_amount = data.sol;
+    let client = RpcClient::new(RPC_URL);
+    let wallet = wallet_add.parse::<Pubkey>().unwrap();
+    let old_balance = client.get_balance(&wallet).unwrap();
+
+    match client.request_airdrop(&wallet, airdro_amount * LAMPORTS_PER_SOL) {
+        Ok(s) => {
+            println!("Success! Check out your TX here:");
+            println!(
+                "https://explorer.solana.com/tx/{}?cluster=devnet",
+                s.to_string()
+            );
+        }
+        Err(e) => println!("Opps , Kuchh to gadbad hai re baba: {}", e.to_string()),
+    };
+
+    thread::sleep(Duration::from_secs(10));
+
+    let new_balance = client.get_balance(&wallet).unwrap();
+
+    Json(GetAirdropRespose {
+        wallet_add,
+        previous_balance_lamports: old_balance,
+        new_balance_lamports: new_balance,
+        new_balance_sol: new_balance as f64 / 1_000_000_000.0,
+    })
+}
+
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
-    let app = Route::new().at("/get_balance", get(get_balance));
+    let app = Route::new()
+        .at("/get_balance", get(get_balance))
+        .at("/get_airdrop", get(get_airdrop));
 
     Server::new(TcpListener::bind("0.0.0.0:3000"))
         .name("hello-world")
