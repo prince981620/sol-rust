@@ -13,6 +13,7 @@ use solana_sdk::{
     signature::{Keypair, Signer, read_keypair_file},
     transaction::Transaction,
 };
+// const RPC_URL: &str = "http://127.0.0.1:8899";
 const RPC_URL: &str = "https://api.devnet.solana.com";
 use serde::{Deserialize, Serialize};
 use std::{str::FromStr, time::Duration};
@@ -49,7 +50,7 @@ fn get_balance(Json(data): Json<GetBalance>) -> Json<GetBalanceRespose> {
     let wallet_add = data.wallet;
     let client = RpcClient::new(RPC_URL);
     let wallet = wallet_add.parse::<Pubkey>().unwrap();
-    let balance = client.get_balance(&wallet).unwrap();
+    let balance = client.get_balance(&wallet).unwrap(); 
     Json(GetBalanceRespose {
         wallet_add,
         balance_lamports: balance,
@@ -69,14 +70,16 @@ fn get_airdrop(Json(data): Json<GetAirdrop>) -> Json<GetAirdropRespose> {
         Ok(s) => {
             println!("Success! Check out your TX here:");
             println!(
-                "https://explorer.solana.com/tx/{}?cluster=devnet",
+                "https://explorer.solana.com/tx/{}?cluster=custom",
                 s.to_string()
             );
+            client.confirm_transaction(&s).expect("Tx confirmation failed");
+
         }
         Err(e) => println!("Opps , Kuchh to gadbad hai re baba: {}", e.to_string()),
     };
 
-    thread::sleep(Duration::from_secs(10));
+    // thread::sleep(Duration::from_secs(10));
 
     let new_balance = client.get_balance(&wallet).unwrap();
 
@@ -88,9 +91,15 @@ fn get_airdrop(Json(data): Json<GetAirdrop>) -> Json<GetAirdropRespose> {
     })
 }
 
+#[handler]
+fn landing_page() -> String {
+    String::from("Hello Its me Prince, you can call /get_balance with your wallet PublicKey & also feel free to play with /get_airdrop although there is 69% chance that it will throw limit exhausted")
+}
+
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
     let app = Route::new()
+         .at("/",get(landing_page))
         .at("/get_balance", get(get_balance))
         .at("/get_airdrop", get(get_airdrop));
 
